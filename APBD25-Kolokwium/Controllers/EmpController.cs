@@ -21,9 +21,10 @@ namespace APBD25_Kolokwium.Controllers
         {
             try
             {
-                var task = await dbService.Get(id, cancellationToken);
+              //  var task = await dbService.Get(id, cancellationToken);
 
-                return Ok(task);
+              //  return Ok(task);
+              return Ok();
 
             }
             catch (NotFoundException e)
