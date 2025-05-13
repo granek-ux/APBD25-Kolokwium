@@ -23,7 +23,7 @@ public class DBService : IDBService
         string comand = "Select * from Customer where customer_id = @id";
         
         List<Customer> customers = new List<Customer>();
-        using (SqlConnection conn = new SqlConnection(_configuration.GetConnectionString("Default")) )
+        using (SqlConnection conn = new SqlConnection(_configuration.GetConnectionString("LocalDB")) )
         using (SqlCommand cmd = new SqlCommand(testcommand, conn))
         {
             await conn.OpenAsync(cancellationToken);
