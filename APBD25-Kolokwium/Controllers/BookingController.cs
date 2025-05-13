@@ -34,11 +34,11 @@ namespace APBD25_Kolokwium.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Post([FromBody] ReservationDto reservationDto, CancellationToken cancellationToken)
+        public async Task<IActionResult> Post([FromBody] BookingDto bookingDto, CancellationToken cancellationToken)
         {
             try
             {
-                await dbService.Post(reservationDto, cancellationToken);
+                await dbService.Post(bookingDto, cancellationToken);
                 return Created();
             }
             catch (NotFoundException e)

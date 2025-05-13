@@ -8,6 +8,6 @@ public interface IDBService
 {
     
     public Task<Booking> GetBooking(int id,CancellationToken cancellationToken);
-    public Task<int> Post(ReservationDto reservationDto, CancellationToken cancellationToken);
+    public Task<int> Post(BookingDto bookingDto, CancellationToken cancellationToken);
     
 }

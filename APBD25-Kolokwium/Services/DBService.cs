@@ -21,7 +21,9 @@ public class DBService : IDBService
     {
         if(id <= 0)
             throw new BadRequestException("Invalid id, Id should be greater than 0");
+        
         Booking booking = new Booking();
+        
         string testcommand = "SELECT count(*) from Booking where booking_id = @id;";
         string getBookingcomand = @"SELECT date, G.first_name, G.last_name,G.date_of_birth, E.first_name, E.last_name, E.employee_number 
                                     from Booking 
@@ -31,9 +33,8 @@ public class DBService : IDBService
         
         string getAtractions = "SELECT A.name , A.price, amount from  Booking_Attraction join dbo.Attraction A on A.attraction_id = Booking_Attraction.attraction_id where booking_id = @id";
         
-        List<Customer> customers = new List<Customer>();
-        using (SqlConnection conn = new SqlConnection(_configuration.GetConnectionString("LocalDB")) )
-        using (SqlCommand cmd = new SqlCommand(testcommand, conn))
+        await using (SqlConnection conn = new SqlConnection(_configuration.GetConnectionString("LocalDB")) )
+        await using( SqlCommand cmd = new SqlCommand(testcommand, conn))
         {
             await conn.OpenAsync(cancellationToken);
             cmd.Parameters.AddWithValue("@id", id);
@@ -48,7 +49,7 @@ public class DBService : IDBService
             
             cmd.Parameters.AddWithValue("@id", id);
 
-            using (var reader = await cmd.ExecuteReaderAsync(cancellationToken))
+            await using (var reader = await cmd.ExecuteReaderAsync(cancellationToken))
             {
                 while (await reader.ReadAsync(cancellationToken))
                 {
@@ -72,7 +73,7 @@ public class DBService : IDBService
             cmd.CommandText = getAtractions;
             cmd.Parameters.AddWithValue("@id", id);
             booking.attractions = new List<Attraction>();
-            using (var reader = await cmd.ExecuteReaderAsync(cancellationToken))
+            await using (var reader = await cmd.ExecuteReaderAsync(cancellationToken))
                 while (await reader.ReadAsync(cancellationToken))
                 {
                     booking.attractions.Add(new Attraction()
@@ -86,7 +87,7 @@ public class DBService : IDBService
         }
     }
 
-    public async Task<int> Post(ReservationDto reservationDto, CancellationToken cancellationToken)
+    public async Task<int> Post(BookingDto bookingDto, CancellationToken cancellationToken)
     {
         string checkBookingCommnad = "SELECT COUNT(*) from  Booking where booking_id = @booking_id";
         string checkGuestCommnad = "SELECT COUNT(*) from Guest where guest_id = @guest_id;";
@@ -96,12 +97,12 @@ public class DBService : IDBService
         
         int employeeId = 0;
         
-        using (SqlConnection conn = new SqlConnection(_configuration.GetConnectionString("LocalDB")) )
-        using (SqlCommand cmd = new SqlCommand(checkBookingCommnad, conn))
+        await using (SqlConnection conn = new SqlConnection(_configuration.GetConnectionString("LocalDB")) )
+        await using (SqlCommand cmd = new SqlCommand(checkBookingCommnad, conn))
         {
             await conn.OpenAsync(cancellationToken);
             
-            cmd.Parameters.AddWithValue("@booking_id", reservationDto.bookingId);
+            cmd.Parameters.AddWithValue("@booking_id", bookingDto.bookingId);
             var checkB = (int)(await cmd.ExecuteScalarAsync(cancellationToken));
             if (checkB == 1)
                 throw new ConflictException("Booking already exists");
@@ -109,7 +110,7 @@ public class DBService : IDBService
             cmd.Parameters.Clear();
             cmd.CommandText = checkGuestCommnad;
             
-            cmd.Parameters.AddWithValue("@guest_id", reservationDto.guestId);
+            cmd.Parameters.AddWithValue("@guest_id", bookingDto.guestId);
             
             var checkG = (int)(await cmd.ExecuteScalarAsync(cancellationToken));
             if (checkG == 0)
@@ -117,7 +118,7 @@ public class DBService : IDBService
             
             cmd.Parameters.Clear();
             cmd.CommandText = checkEmployyCommand;
-            cmd.Parameters.AddWithValue("@employee_number", reservationDto.employeeNumber);
+            cmd.Parameters.AddWithValue("@employee_number", bookingDto.employeeNumber);
 
             try
             {
@@ -127,13 +128,10 @@ public class DBService : IDBService
             {   
                 throw new NotFoundException("Employee not found"); 
             }
-    //        var checkE = (int)(await cmd.ExecuteScalarAsync(cancellationToken));
-   //         if (checkE == 0)
-    //            throw new NotFoundException("Employee not found");
-
-            Dictionary<int,int> attractionsMap = new Dictionary<int,int>();
             
-            foreach (AttractionsDto attraction in reservationDto.attractions)
+            var attractionsMap = new Dictionary<int,int>();
+            
+            foreach (var attraction in bookingDto.attractions)
             {
                 cmd.Parameters.Clear();
                 cmd.CommandText = checkAttractionsCommand;
@@ -149,24 +147,24 @@ public class DBService : IDBService
                 }
             }
             
-            DbTransaction transaction = await conn.BeginTransactionAsync();
+            DbTransaction transaction = await conn.BeginTransactionAsync(cancellationToken);
             cmd.Transaction = transaction as SqlTransaction;
 
-            string instertBookingCommand = "INSERT INTO Booking (booking_id, guest_id, employee_id, date) VALUES (@booking_id, @guest_id, @employee_id, @date);";
+            var instertBookingCommand = "INSERT INTO Booking (booking_id, guest_id, employee_id, date) VALUES (@booking_id, @guest_id, @employee_id, @date);";
             try
             {
                 cmd.Parameters.Clear();
                 
                 cmd.CommandText = instertBookingCommand;
                 
-                cmd.Parameters.AddWithValue("@booking_id", reservationDto.bookingId);
-                cmd.Parameters.AddWithValue("@guest_id", reservationDto.guestId);
+                cmd.Parameters.AddWithValue("@booking_id", bookingDto.bookingId);
+                cmd.Parameters.AddWithValue("@guest_id", bookingDto.guestId);
                 cmd.Parameters.AddWithValue("@employee_id", employeeId);
                 DateTime date = DateTime.Today;
                 cmd.Parameters.AddWithValue("@date", date);
                 
                 
-                await cmd.ExecuteNonQueryAsync();
+                await cmd.ExecuteNonQueryAsync(cancellationToken);
 
                 string insterAttractionsCommand = "INSERT INTO Booking_Attraction (booking_id, attraction_id, amount) VALUES (@booking_id, @attraction_id, @amount);";
                 
@@ -175,20 +173,19 @@ public class DBService : IDBService
                     cmd.Parameters.Clear();
                     cmd.CommandText = insterAttractionsCommand;
                     
-                    cmd.Parameters.AddWithValue("@booking_id", reservationDto.bookingId);
+                    cmd.Parameters.AddWithValue("@booking_id", bookingDto.bookingId);
                     cmd.Parameters.AddWithValue("@attraction_id", attraction.Key);
                     cmd.Parameters.AddWithValue("@amount", attraction.Value);
                     
-                  await cmd.ExecuteNonQueryAsync();
+                  await cmd.ExecuteNonQueryAsync(cancellationToken);
                 }
-                await transaction.CommitAsync();
+                await transaction.CommitAsync(cancellationToken);
             }
             catch (Exception e)
             {
                 
                 await transaction.RollbackAsync();
-               // throw new ConflictException("Conflict during transaction");
-                throw new Exception(e.Message);
+                throw new ConflictException("Conflict during transaction");
             }
 
             return 1;

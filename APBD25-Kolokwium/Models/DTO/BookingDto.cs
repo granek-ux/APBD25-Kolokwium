@@ -2,7 +2,7 @@
 
 namespace APBD25_Kolokwium.Models.DTO;
 
-public class ReservationDto
+public class BookingDto
 {
     [Required]
     public int bookingId { get; set; }
